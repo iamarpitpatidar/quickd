@@ -1,4 +1,4 @@
-#! /usr/bin/env bash
+#! /bin/sh
 
 function print() {
   printf "\r%s" "$1"
