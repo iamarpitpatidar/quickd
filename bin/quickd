@@ -1,0 +1,143 @@
+#! /usr/bin/env bash
+
+function print() {
+  printf "\r%s" "$1"
+  [ "$2" == 'true' ] && printf "\n"
+}
+
+# Credit - altoplace.com
+function error_exit()
+{
+  echo -e "$1" 1>&2
+  exit 1
+}
+function pwait()
+{
+  process=$1
+  action=$2
+  count=0
+
+  if [[ $action == "stop" ]]
+  then
+    until ! pgrep -q "$process" || [[ $count -gt 5 ]]
+    do
+      echo "waiting for $process to stop $count ..."
+      sleep 1
+      ((count++))
+    done
+    if ! pgrep -q "$process"; then
+      echo "$process stopped OK ..."
+    else
+      error_exit "$process failed to stop"
+    fi
+  else
+    # action is start
+    sleep 1 # give process time to die for configuration file errors ...
+    until pgrep -q "$process" || [[ $count -gt 5 ]]
+    do
+      echo "waiting for $process to start $count ..."
+      sleep 1
+      ((count++))
+    done
+    if pgrep -q "$process"; then
+      echo "$process started OK ..."
+    else
+      error_exit "$process failed to start"
+    fi
+  fi
+}
+
+function run() {
+  if [ $# -lt 1 ]; then
+    printf "Usage: run Command [process]"
+    exit 100
+  fi
+
+  # if process has different name in pid
+  [[ $# == 2 ]] && process=$2 || process=$1
+
+  if pgrep -fl "$process" &>/dev/null; then
+    print "$process is already running. skipping..." true
+  else
+    $1
+    wait $!
+    if [ $? -eq 0 ]; then
+      print "$process is running" true
+    else
+      print "Failed to start $process" true
+    fi
+  fi
+}
+
+function term() {
+  if [ $# -lt 1 ]; then
+    printf "Usage: run Command [process]"
+    exit 100
+  fi
+
+  # if process has different name in pid
+  [[ $# == 2 ]] && process=$2 || process=$1
+
+  if ! pgrep -fl "$process" &>/dev/null; then
+    print "$process is not running. skipping..." true
+  else
+    $1
+    wait $!
+    if [ $? -eq 0 ]; then
+      print "$process is stopped." true
+    else
+      print "Failed to stop $process" true
+    fi
+  fi
+}
+
+function start() {
+  print "Starting Nginx"
+  run nginx
+  run "mysql.server start" mysql
+  print "Starting PHP"
+  run "/usr/local/opt/php@8.2/sbin/php-fpm -D" php-fpm
+  print "All systems up and running..."
+}
+
+function stop() {
+  PHP_FPM_PID='/usr/local/var/run/php-fpm.pid'
+
+  print "stopping Nginx"
+  term "nginx -s stop" nginx
+  term "mysql.server stop" mysql
+  term "kill $([ -f $PHP_FPM_PID ] && cat $PHP_FPM_PID)" php-fpm
+  print "All systems shut down successfully..." true
+}
+
+function restart() {
+  stop;
+  print "Starting all systems..." true
+  start;
+}
+
+function status()
+{
+  if [[ $# == 1 && ! ($1 == 'nginx' || $1 == 'php' || $1 == 'mysql') ]]; then
+    error_exit "Usage: quickd status [nginx|php|mysql]"
+  fi
+  [[ $# == 1 ]] && search=$1 || search='php|nginx|mysql'
+
+  # shellcheck disable=SC2009
+  ps -axo user,pid,start,etime,time,nice,vsz,rss,command | grep -E $search | sed '/grep/d'
+}
+
+function help() {
+  echo "usage: quick start|stop|restart|help"
+}
+
+case "$1" in
+  start) start;;
+  stop) stop;;
+  help) help;;
+  status)
+    shift
+    status "$@";;
+  restart)  restart;;
+  *) start;;
+esac
