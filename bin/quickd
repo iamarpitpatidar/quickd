@@ -5,50 +5,9 @@ function print() {
   [ "$2" == 'true' ] && printf "\n"
 }
 
-# Credit - altoplace.com
-function error_exit()
-{
-  echo -e "$1" 1>&2
-  exit 1
-}
-function pwait()
-{
-  process=$1
-  action=$2
-  count=0
-
-  if [[ $action == "stop" ]]
-  then
-    until ! pgrep -q "$process" || [[ $count -gt 5 ]]
-    do
-      echo "waiting for $process to stop $count ..."
-      sleep 1
-      ((count++))
-    done
-    if ! pgrep -q "$process"; then
-      echo "$process stopped OK ..."
-    else
-      error_exit "$process failed to stop"
-    fi
-  else
-    # action is start
-    sleep 1 # give process time to die for configuration file errors ...
-    until pgrep -q "$process" || [[ $count -gt 5 ]]
-    do
-      echo "waiting for $process to start $count ..."
-      sleep 1
-      ((count++))
-    done
-    if pgrep -q "$process"; then
-      echo "$process started OK ..."
-    else
-      error_exit "$process failed to start"
-    fi
-  fi
-}
-
 function run() {
-  if [ $# -lt 1 ]; then
+  if [ $# -lt 1 ]; 
+  then
     printf "Usage: run Command [process]"
     exit 100
   fi
